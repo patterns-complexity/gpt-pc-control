@@ -1,0 +1,4 @@
+*cache*
+/gptuser
+/context.txt
+/.env
