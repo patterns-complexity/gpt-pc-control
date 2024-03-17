@@ -36,8 +36,8 @@ def main(state: dict[str, Any]) -> None:
           model = Model.GPT_4_TURBO
 
           # Set the model to GPT-3.5 Turbo if the loop count is greater than 1
-          if loop_count > 1:
-            model = Model.GPT_3_5_INSTRUCTIONS
+          # if loop_count > 1:
+          #   model = Model.GPT_3_5_INSTRUCTIONS
 
           # Get response from GPT
           sanitize_history()
