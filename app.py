@@ -1,74 +1,85 @@
+from time import sleep
+from click import pause
 from src.imports import *
 
-from src.UserGPT.types import *
 from src.UserGPT.UI.cli import *
-from src.UserGPT.Logic.history_management import *
-from src.UserGPT.Logic.commands import *
+from src.UserGPT.Logic.context import *
+from src.UserGPT.Logic.Commands.commands import *
 from src.UserGPT.Logic.openai_interface import *
 
+def process_tool_calls(run: Run, thread: Thread) -> None:
+    if run.required_action is None or run.required_action.type != 'submit_tool_outputs':
+        print_with_color('No tool calls to process...', CLIColor.RED)
+        return
+    print_with_color('Processing ChatGPT\'s request to run a function...', CLIColor.YELLOW)
+    required_action = run.required_action
+    tool_calls = required_action.submit_tool_outputs.tool_calls
+    print_with_color('Running those functions...', CLIColor.YELLOW)
+    parsed = parse_tool_calls(tool_calls)
+    print_with_color('Submitting functions\' outputs...', CLIColor.GREEN)
+    submit_tool_outputs(run, thread, parsed)
+    for tool_output in parsed:
+        print_with_color(str(tool_output), CLIColor.BLUE)
+
 def main(state: dict[str, Any]) -> None:
-    # Reset the conversation context
-    reset_context('context.txt')
+    assistants: Iterable[Assistant] = list_assistants()
+
+    print_with_color('Welcome to the Windows CLI Assistant!', CLIColor.GREEN)
+
+    if ASSISTANT_ID not in [assistant.id for assistant in assistants]:
+        print_with_color('Creating assistant...', CLIColor.YELLOW)
+        assistant: str = create_assistant(
+          Model.GPT_4_TURBO,
+          name='Windows CLI Assistant',
+          description='A Windows CLI Assistant capable of running commands in a Windows CLI',
+          instructions=load_context('context.txt'),
+          tools=tools
+        )
+        print(assistant)
+        print_with_color('Assistant created!', CLIColor.GREEN)
+        print_with_color('Please put this Assistant ID in your .env file:', CLIColor.GREEN)
+        print_with_color(f'ASSISTANT_ID={assistant}', CLIColor.BLUE)
+        return
+
+    thread = create_thread(ASSISTANT_ID)
+
+    print_with_color('Thread created!', CLIColor.GREEN)
+    print_with_color('You can now start chatting with the assistant!', CLIColor.GREEN)
+    print_with_color('Type `q` to quit the assistant.', CLIColor.GREEN)
 
     while not state['should_quit']:
-        # Reset the ask_user variable
         state['ask_user'] = False
 
-        # Ask for user input
         user_input = prompt_user('You: > ')
 
-        # Check if the user wants to quit
         if state['should_quit']:
             break
 
-        # Add user input to history
-        add_to_history(ChatRole.USER, user_input)
+        create_message(thread, user_input)
 
-        # Reset the loop count
-        loop_count = 0
+        run = create_run(thread, ASSISTANT_ID)
 
-        # Start the inner loop
-        while not state['ask_user']:
-          # Increment the loop count
-          loop_count += 1
+        while run.status != 'completed':
+            run = fetch_run(run, thread)
+            if run.status == 'requires_action' and run.required_action is not None and run.required_action.type == 'submit_tool_outputs':
+                print_with_color(f'Run status: running commands and submitting outputs, this might take a moment...', CLIColor.YELLOW)
+                process_tool_calls(run, thread)
+            elif run.status == 'completed':
+                print_with_color(f'Run status: Finished!', CLIColor.GREEN)
+            elif (
+              run.status == 'failed'
+                or run.status == 'cancelled'
+                or run.status == 'cancelling'
+                or run.status == 'expired'
+            ):
+                print_with_color(f'Run status: ERROR!', CLIColor.RED)
+                break
+            sleep(1)
+        all_messages = get_all_message_texts(thread)
+        history = '\n'.join(all_messages)
+        print_with_color(history, CLIColor.WHITE)
+        pause('Press Enter to continue...')
 
-          # Set the model
-          model = Model.GPT_4_TURBO
-
-          # Set the model to GPT-3.5 Turbo if the loop count is greater than 1
-          # if loop_count > 1:
-          #   model = Model.GPT_3_5_INSTRUCTIONS
-
-          # Get response from GPT
-          sanitize_history()
-          response = ask_gpt(model, history=state['history'], tools=tools)
-          message_content = get_message_content(response)
-          tool_calls = get_tool_calls(response)
-
-          if message_content is not None:
-            # Print response from GPT
-            print_with_color(f'Assistant: > {message_content}', CLIColor.GREEN)
-
-            # Add response to history
-            add_to_history(ChatRole.ASSISTANT, message_content)
-
-          # Parse tool calls
-          if tool_calls and len(list(tool_calls)) > 0:
-            add_to_history(ChatRole.ASSISTANT, f'Running functions: {", ".join(get_function_names(tool_calls))}...')
-            tool_calls_results = parse_tool_calls(tool_calls)
-            history_message = ''
-            for function_name, arguments, function_result in tool_calls_results:
-              history_message += f'Function:\n`{function_name}`\nRan with arguments:\n`{str(arguments)}`\nReturned:\n`{function_result}`\n'
-            add_to_history(ChatRole.SYSTEM, history_message)
-            print_with_color(history_message, CLIColor.BLUE)
-
-          add_to_history(
-            ChatRole.SYSTEM,
-            '''User has received the above responses.
-            Remember that user can't see command outputs, so you have to summarize the output in the response.
-            Otherwise, the user won't know what happened.
-            If the Assistant has nothing more to do, he should use the `stop_execution` tool call.'''
-          )
 
 if __name__ == '__main__':
   main(state)
