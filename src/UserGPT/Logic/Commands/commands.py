@@ -6,6 +6,7 @@ commands_map = {
     'run_win_cli': run_win_cli,
     'make_http_request': make_http_request,
     'stop_execution': stop_execution,
+    'run_python_code': run_python_code
 }
 
 def run_function(function_name: str, arguments: dict[str, str]) -> tuple[str, dict[str, str], str]:

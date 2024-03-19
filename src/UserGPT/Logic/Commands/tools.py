@@ -22,6 +22,28 @@ tool_run_win_cli: ToolFunction = ToolFunction(
     type="function"
 )
 
+tool_run_python_code_function_parameters: FunctionParameters = dict(
+    type='object',
+    properties={
+        'code': {
+            'type': 'string',
+            'description': 'The Python code to run'
+        }
+    },
+    required=['code']
+)
+
+tool_run_python_code_definition: FunctionDefinition = FunctionDefinition(
+    name='run_python_code',
+    description='Run Python code',
+    parameters=tool_run_python_code_function_parameters
+)
+
+tool_run_python_code: ToolFunction = ToolFunction(
+    function=tool_run_python_code_definition,
+    type="function"
+)
+
 tool_make_http_request_function_parameters: FunctionParameters = dict(
     type='object',
     properties={
@@ -56,29 +78,8 @@ tool_make_http_request: ToolFunction = ToolFunction(
     type="function"
 )
 
-tool_stop_execution_parameters: FunctionParameters = dict(
-    type='object',
-    properties={
-        'reason': {
-            'type': 'string',
-            'description': 'The reason for stopping the execution'
-        }
-    }
-)
-
-tool_stop_execution_definition: FunctionDefinition = FunctionDefinition(
-    name='stop_execution',
-    description='Stop the execution of the assistant',
-    parameters=tool_stop_execution_parameters
-)
-
-tool_stop_execution: ToolFunction = ToolFunction(
-    function=tool_stop_execution_definition,
-    type="function"
-)
-
 tools: Iterable[ToolFunction] = [
     tool_run_win_cli,
     tool_make_http_request,
-    tool_stop_execution
+    tool_run_python_code
 ]
